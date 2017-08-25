@@ -1,0 +1,213 @@
+*&---------------------------------------------------------------------*
+*& Report  ZXF16W_LN_DBSK_SAMPDAT
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zxf16w_ln_dbsk_sampdat.
+
+TABLES: zxf16w_dbsk_kund,
+        zxf16w_dbsk_prod,
+        zxf16w_dbsk_pakt.
+
+DATA: gt_kund    TYPE TABLE OF zxf16w_dbsk_kund,
+      wa_kund    LIKE LINE OF gt_kund,
+      gt_prod    TYPE TABLE OF zxf16w_dbsk_prod,
+      wa_prod    LIKE LINE OF gt_prod,
+      gt_pakt    TYPE TABLE OF zxf16w_dbsk_pakt,
+      wa_pakt    LIKE LINE OF gt_pakt,
+      gt_auft    TYPE TABLE OF zxf16w_dbsk_auft,
+      wa_auft    LIKE LINE OF gt_auft,
+      gv_auft_id LIKE wa_auft-auftrag_id,
+      gt_posi    TYPE TABLE OF zxf16w_dbsk_posi,
+      wa_posi    LIKE LINE OF gt_posi.
+
+
+
+
+
+DELETE FROM zxf16w_dbsk_kund.
+PERFORM add_kund USING 'gustav' 'gans' 'blumenstrasse 17' 'bank 123'.
+PERFORM add_kund USING 'greta' 'generisch' 'rosenpfad 73' 'bank 456'.
+PERFORM add_kund USING 'max' 'mustermann' 'nelkenweg 279' 'bank 789'.
+PERFORM add_kund USING 'niels' 'nielsson' 'testweg 12' 'keine bank 123'.
+INSERT zxf16w_dbsk_kund FROM TABLE gt_kund.
+
+
+
+DELETE FROM zxf16w_dbsk_prod.
+PERFORM add_prod USING 'Domain name.de' '25' '9'.
+PERFORM add_prod USING 'Domain name.com' '25' '19'.
+PERFORM add_prod USING 'Domain name.net' '25' '19'.
+PERFORM add_prod USING 'Domain name.eu' '25' '29'.
+PERFORM add_prod USING 'Domain name.org' '25' '19'.
+PERFORM add_prod USING 'Domain name.info' '25' '19'.
+PERFORM add_prod USING 'Domain name.tips' '25' '19'.
+PERFORM add_prod USING 'Domain name.at' '25' '49'.
+PERFORM add_prod USING 'Domain name.berlin' '25' '49'.
+PERFORM add_prod USING 'Domain name.ch' '25' '99'.
+
+PERFORM add_prod USING '30 GB Webspace' '5' '35'.
+PERFORM add_prod USING '60 GB Webspace' '5' '60'.
+PERFORM add_prod USING '120 GB Webspace' '5' '100'.
+PERFORM add_prod USING '2 Datenbanken auf SSD' '5' '5'.
+PERFORM add_prod USING '25 Datenbanken auf SSD' '5' '20'.
+PERFORM add_prod USING '50 Datenbanken auf SSD' '5' '35'.
+PERFORM add_prod USING '10 GB flexibler Mailspace' '5' '10'.
+PERFORM add_prod USING '20 GB flexibler Mailspace' '5' '20'.
+PERFORM add_prod USING '40 GB flexibler Mailspace' '5' '35'.
+PERFORM add_prod USING 'SSL-Zertifikat' '5' '2'.
+
+PERFORM add_pakt USING 'PowerWeb Starter' '10' '48'.
+PERFORM add_pakt USING 'PowerWeb Basic' '10' '84'.
+PERFORM add_pakt USING 'PowerWeb Plus' '10' '120'.
+INSERT zxf16w_dbsk_prod FROM TABLE gt_prod.
+
+
+
+DELETE FROM zxf16w_dbsk_pakt.
+PERFORM add_pakt_item USING 'PowerWeb Starter' '30 GB Webspace'.
+PERFORM add_pakt_item USING 'PowerWeb Starter' '2 Datenbanken auf SSD'.
+PERFORM add_pakt_item USING 'PowerWeb Starter' '10 GB flexibler Mailspace'.
+PERFORM add_pakt_item USING 'PowerWeb Basic' '60 GB Webspace'.
+PERFORM add_pakt_item USING 'PowerWeb Basic' '25 Datenbanken auf SSD'.
+PERFORM add_pakt_item USING 'PowerWeb Basic' '20 GB flexibler Mailspace'.
+PERFORM add_pakt_item USING 'PowerWeb Plus' '120 GB Webspace'.
+PERFORM add_pakt_item USING 'PowerWeb Plus' '50 Datenbanken auf SSD'.
+PERFORM add_pakt_item USING 'PowerWeb Plus' '40 GB flexibler Mailspace'.
+INSERT zxf16w_dbsk_pakt FROM TABLE gt_pakt.
+
+
+DELETE FROM zxf16w_dbsk_auft.
+DELETE FROM zxf16w_dbsk_posi.
+PERFORM add_auft USING 'max' 'mustermann' CHANGING gv_auft_id.
+PERFORM add_posi USING gv_auft_id '1' 'SSL-Zertifikat' '1'.
+PERFORM add_posi USING gv_auft_id '2' 'Domain name.de' '1'.
+PERFORM add_auft USING 'greta' 'generisch' CHANGING gv_auft_id.
+PERFORM add_posi USING gv_auft_id '1' 'PowerWeb Starter' '1'.
+INSERT zxf16w_dbsk_auft FROM TABLE gt_auft.
+INSERT zxf16w_dbsk_posi FROM TABLE gt_posi.
+
+
+
+
+MESSAGE text-001 TYPE 'S'.
+
+
+
+
+
+FORM add_kund
+  USING pa_vorname LIKE wa_kund-vorname
+        pa_nachname LIKE wa_kund-nachname
+        pa_anschrift LIKE wa_kund-anschrift
+        pa_konto LIKE wa_kund-konto.
+  CALL FUNCTION 'ZXF16W_LN_DBSK_GENERATE_ID'
+    EXPORTING
+      object = 'ZXF16WKUND'
+    IMPORTING
+      id     = wa_kund-kunden_id.
+  wa_kund-vorname = pa_vorname.
+  wa_kund-nachname = pa_nachname.
+  wa_kund-anschrift = pa_anschrift.
+  wa_kund-konto = pa_konto.
+  INSERT wa_kund INTO TABLE gt_kund.
+ENDFORM.
+
+FORM add_prod
+  USING pa_name LIKE wa_prod-name
+        pa_preis_einmal LIKE wa_prod-preis_einmal
+        pa_preis_jaerlich LIKE wa_prod-preis_jaerlich.
+  CALL FUNCTION 'ZXF16W_LN_DBSK_GENERATE_ID'
+    EXPORTING
+      object = 'ZXF16WPROD'
+    IMPORTING
+      id     = wa_prod-produkt_id.
+  wa_prod-paket_id = 0.
+  wa_prod-name = pa_name.
+  wa_prod-preis_einmal = pa_preis_einmal.
+  wa_prod-preis_einmal_w = 'EUR'.
+  wa_prod-preis_jaerlich = pa_preis_jaerlich.
+  wa_prod-preis_jaerlich_w = 'EUR'.
+  INSERT wa_prod INTO TABLE gt_prod.
+ENDFORM.
+
+FORM add_pakt
+  USING pa_name LIKE wa_prod-name
+        pa_preis_einmal LIKE wa_prod-preis_einmal
+        pa_preis_jaerlich LIKE wa_prod-preis_jaerlich.
+  CALL FUNCTION 'ZXF16W_LN_DBSK_GENERATE_ID'
+    EXPORTING
+      object = 'ZXF16WPROD'
+    IMPORTING
+      id     = wa_prod-produkt_id.
+  CALL FUNCTION 'ZXF16W_LN_DBSK_GENERATE_ID'
+    EXPORTING
+      object = 'ZXF16WPAKT'
+    IMPORTING
+      id     = wa_prod-paket_id.
+  wa_prod-name = pa_name.
+  wa_prod-preis_einmal = pa_preis_einmal.
+  wa_prod-preis_einmal_w = 'EUR'.
+  wa_prod-preis_jaerlich = pa_preis_jaerlich.
+  wa_prod-preis_jaerlich_w = 'EUR'.
+  INSERT wa_prod INTO TABLE gt_prod.
+ENDFORM.
+
+FORM add_pakt_item
+  USING pa_paket LIKE wa_prod-name
+        pa_produkt LIKE wa_prod-name.
+
+  SELECT SINGLE produkt_id INTO wa_pakt-produkt_id
+    FROM zxf16w_dbsk_prod
+    WHERE name = pa_produkt.
+
+  SELECT SINGLE paket_id INTO wa_pakt-paket_id
+    FROM zxf16w_dbsk_prod
+    WHERE name = pa_paket.
+
+  INSERT wa_pakt INTO TABLE gt_pakt.
+ENDFORM.
+
+FORM add_auft
+  USING pa_kunde_vn LIKE wa_kund-vorname
+        pa_kunde_nn LIKE wa_kund-nachname
+  CHANGING auft_id.
+
+  CALL FUNCTION 'ZXF16W_LN_DBSK_GENERATE_ID'
+    EXPORTING
+      object = 'ZXF16WPAKT'
+    IMPORTING
+      id     = wa_auft-auftrag_id.
+
+  auft_id = wa_auft-auftrag_id.
+
+  SELECT SINGLE kunden_id INTO wa_auft-kunde_id
+    FROM zxf16w_dbsk_kund
+    WHERE vorname = pa_kunde_vn
+    AND nachname = pa_kunde_nn.
+
+  wa_auft-bestelldatum = sy-datum.
+  wa_auft-status = 'A'.
+
+  INSERT wa_auft INTO TABLE gt_auft.
+ENDFORM.
+
+FORM add_posi
+  USING pa_auft LIKE wa_posi-auftrag_id
+        pa_pos LIKE wa_posi-pos
+        pa_prod LIKE wa_prod-name
+        pa_anz LIKE wa_posi-anzahl.
+
+  SELECT SINGLE produkt_id INTO wa_posi-produkt_id
+    FROM zxf16w_dbsk_prod
+    WHERE name = pa_prod.
+
+  wa_posi-auftrag_id = pa_auft.
+  wa_posi-pos = pa_pos.
+  wa_posi-anzahl = pa_anz.
+
+
+  INSERT wa_posi INTO TABLE gt_posi.
+ENDFORM.

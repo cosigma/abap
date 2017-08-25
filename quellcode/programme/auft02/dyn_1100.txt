@@ -1,0 +1,25 @@
+PROCESS BEFORE OUTPUT.
+
+  LOOP AT   gt_produkt_detail
+       INTO gs_produkt_detail
+       WITH CONTROL produkt_control
+       CURSOR produkt_control-current_line.
+  ENDLOOP.
+
+  MODULE lookup_input.
+  MODULE status_1100.
+*
+PROCESS AFTER INPUT.
+
+  LOOP AT gt_produkt_detail.
+    FIELD gs_produkt_detail-produkt_id.
+    FIELD gs_produkt_detail-paket_id.
+    FIELD gs_produkt_detail-name.
+    FIELD gs_produkt_detail-preis_einmal.
+    FIELD gs_produkt_detail-preis_einmal_w.
+    FIELD gs_produkt_detail-preis_jaerlich.
+    FIELD gs_produkt_detail-preis_jaerlich_w.
+    MODULE modify_produkt.
+  ENDLOOP.
+
+  MODULE user_command_1100.

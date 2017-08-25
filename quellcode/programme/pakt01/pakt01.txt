@@ -1,0 +1,14 @@
+*&---------------------------------------------------------------------*
+*& Modulpool         ZXF16W_LN_DBSK_PAKT01
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+
+INCLUDE ZXF16W_LN_DBSK_PAKT01_TOP               .    " global Data
+
+INCLUDE ZXF16W_LN_DBSK_PAKT01_O01               .  " PBO-Modules
+INCLUDE ZXF16W_LN_DBSK_PAKT01_I01               .  " PAI-Modules
+INCLUDE ZXF16W_LN_DBSK_PAKT01_F01               .  " FORM-Routines

@@ -1,0 +1,432 @@
+*&---------------------------------------------------------------------*
+*& Report  ZXF16W_LN_DBSK_AUFT02
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zxf16w_ln_dbsk_auft02.
+
+CLASS lcl_user_command DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+      alv_user_command
+                    FOR EVENT double_click OF cl_gui_alv_grid
+        IMPORTING e_row e_column sender.
+
+  PRIVATE SECTION.
+
+ENDCLASS.
+
+TYPES:  BEGIN OF ts_produkt.
+        INCLUDE STRUCTURE zxf16w_dbsk_prod.
+TYPES:    anzahl TYPE zxf16w_dbsk_position_anzahl,
+          END OF ts_produkt.
+
+
+TYPES:  BEGIN OF ts_produkt_tab,
+          mark TYPE c.
+        INCLUDE STRUCTURE zxf16w_dbsk_prod.
+TYPES:    anzahl TYPE zxf16w_dbsk_position_anzahl,
+          END OF ts_produkt_tab.
+
+TYPES: BEGIN OF ts_position.
+        INCLUDE STRUCTURE zxf16w_dbsk_posi.
+TYPES: END OF ts_position.
+
+TABLES: zxf16w_dbsk_auft,
+        zxf16w_dbsk_posi,
+        zxf16w_dbsk_kund.
+
+CONTROLS: produkt_control TYPE TABLEVIEW USING SCREEN 1100.
+
+DATA: gt_auftrag              TYPE TABLE OF zxf16w_dbsk_auft,
+      gt_produkt_detail       TYPE TABLE OF ts_produkt_tab,
+      gt_produkt_detail_saved TYPE TABLE OF ts_produkt,
+      gt_fcat             TYPE lvc_t_fcat,
+      gs_auftrag              LIKE LINE OF gt_auftrag,
+      gs_produkt_detail       TYPE ts_produkt_tab,
+      gs_auftrag_detail_saved TYPE ts_produkt,
+      go_alv                  TYPE REF TO cl_gui_alv_grid,
+      go_container            TYPE REF TO cl_gui_custom_container,
+      go_alv_user_command     TYPE REF TO lcl_user_command,
+      gv_display_only         TYPE c,
+      gv_okcode               LIKE sy-ucomm,
+      gv_lines                TYPE lvc_s_row,
+      gv_index                TYPE i.
+
+SELECTION-SCREEN BEGIN OF BLOCK b1.
+SELECT-OPTIONS: s_auf_id FOR zxf16w_dbsk_auft-auftrag_id,
+                s_auf_ku FOR zxf16w_dbsk_auft-kunde_id,
+                s_auf_be FOR zxf16w_dbsk_auft-bestelldatum,
+                s_auf_st FOR zxf16w_dbsk_auft-status.
+SELECTION-SCREEN END OF BLOCK b1.
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME.
+PARAMETERS: s_shw_id TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_ku TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_be TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_st TYPE c AS CHECKBOX DEFAULT 'X'.
+SELECTION-SCREEN END OF BLOCK b2.
+
+
+SELECT * INTO CORRESPONDING FIELDS OF TABLE gt_auftrag
+  FROM zxf16w_dbsk_auft
+ WHERE auftrag_id IN s_auf_id
+   AND kunde_id IN s_auf_ku
+   AND bestelldatum IN s_auf_be
+   AND status IN s_auf_st.
+
+CREATE OBJECT go_container
+  EXPORTING
+    container_name = 'CONTAINER'.
+
+CREATE OBJECT go_alv
+  EXPORTING
+    i_parent = go_container.
+
+PERFORM create_catalog CHANGING gt_fcat.
+
+CALL METHOD go_alv->set_table_for_first_display
+  EXPORTING
+    i_structure_name = 'ZXF16W_DBSK_AUFT_S'
+  CHANGING
+    it_outtab        = gt_auftrag
+    it_fieldcatalog  = gt_fcat.
+
+
+CREATE OBJECT go_alv_user_command.
+
+SET HANDLER go_alv_user_command->alv_user_command FOR go_alv.
+
+gv_display_only = 'X'.
+IF sy-tcode = 'ZXF16W_DBSK_AUFT02'.
+  CLEAR gv_display_only.
+ENDIF.
+
+
+DESCRIBE TABLE gt_auftrag LINES gv_lines.
+IF gv_lines = 1.
+    PERFORM show_detail USING gv_lines.
+  ELSE.
+    CALL SCREEN 1001.
+ENDIF.
+
+CLASS lcl_user_command IMPLEMENTATION.
+  METHOD alv_user_command.
+    PERFORM show_detail CHANGING e_row.
+  ENDMETHOD.                           "handle_user_command
+ENDCLASS.
+
+FORM create_catalog  CHANGING pt_fcat TYPE lvc_t_fcat.
+  FIELD-SYMBOLS: <fs_fcat> LIKE LINE OF gt_fcat.
+
+  CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_structure_name       = 'ZXF16W_DBSK_AUFT_S'
+    CHANGING
+      ct_fieldcat            = pt_fcat
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+  IF sy-subrc <> 0.
+      MESSAGE text-004 TYPE 'E'.
+  ENDIF.
+
+
+  LOOP AT pt_fcat ASSIGNING <fs_fcat>.
+    IF    <fs_fcat>-FIELDNAME = 'AUFTRAG_ID'
+     AND  s_shw_id IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'KUNDE_ID'
+     AND  s_shw_ku IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'BESTELLDATUM'
+     AND  s_shw_be IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'STATUS'
+     AND  s_shw_st IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+
+FORM show_detail USING pv_index type lvc_s_row.
+  DATA: lt_position TYPE TABLE OF zxf16w_dbsk_posi.
+
+  FIELD-SYMBOLS: <lfs_position> TYPE zxf16w_dbsk_posi.
+
+  READ TABLE gt_auftrag INTO zxf16w_dbsk_auft INDEX pv_index.
+
+  gv_index = pv_index.
+
+  SELECT * INTO CORRESPONDING FIELDS OF TABLE lt_position
+    FROM zxf16w_dbsk_posi
+   WHERE auftrag_id = zxf16w_dbsk_auft-auftrag_id.
+
+  LOOP AT lt_position ASSIGNING <lfs_position>.
+    MOVE-CORRESPONDING <lfs_position> TO gs_produkt_detail.
+    SELECT SINGLE * INTO CORRESPONDING FIELDS OF gs_produkt_detail
+      FROM zxf16w_dbsk_prod
+     WHERE produkt_id = gs_produkt_detail-produkt_id.
+    APPEND gs_produkt_detail TO gt_produkt_detail.
+  ENDLOOP.
+
+  IF zxf16w_dbsk_auft-status <> 'A'.
+    gv_display_only = 'X'.
+  ENDIF.
+
+  IF gv_display_only IS INITIAL.
+    MOVE-CORRESPONDING gt_produkt_detail TO gt_produkt_detail_saved.
+    MOVE-CORRESPONDING gs_auftrag TO gs_auftrag_detail_saved.
+  ENDIF.
+
+  REFRESH CONTROL 'PRODUKT_CONTROL' FROM SCREEN 1100.
+
+  CALL SCREEN 1100.
+ENDFORM.
+
+FORM exit.
+  CLEAR gt_produkt_detail.
+  CLEAR gt_produkt_detail_saved.
+  CLEAR gs_auftrag.
+  CLEAR gs_auftrag_detail_saved.
+  LEAVE TO SCREEN 0.
+ENDFORM.
+
+FORM user_command_1001.
+  DATA: lv_okcode LIKE gv_okcode.
+
+  lv_okcode = gv_okcode.
+  CLEAR gv_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+    WHEN OTHERS.
+  ENDCASE.
+ENDFORM.
+
+FORM user_command_1100.
+  DATA: lv_okcode LIKE gv_okcode.
+
+  lv_okcode = gv_okcode.
+  CLEAR gv_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+    WHEN 'MODI'.
+      PERFORM switch_modus.
+    WHEN 'BUCH'.
+      IF gv_display_only IS NOT INITIAL.
+        PERFORM buche_status USING 'B'.
+      ENDIF.
+    WHEN 'STOR'.
+      IF gv_display_only IS NOT INITIAL.
+        PERFORM buche_status USING 'S'.
+      ENDIF.
+    WHEN 'ADDL'.
+      IF gv_display_only IS INITIAL.
+        PERFORM append_empty_line.
+      ENDIF.
+    WHEN 'DELL'.
+      IF gv_display_only IS INITIAL.
+        PERFORM remove_lines.
+      ENDIF.
+    WHEN 'SAVE'.
+      IF gv_display_only IS INITIAL.
+        PERFORM save.
+      ENDIF.
+  ENDCASE.
+ENDFORM.
+
+FORM buche_status USING pv_status TYPE zxf16w_dbsk_auftrag_status.
+
+  IF zxf16w_dbsk_auft-status = 'A'.
+    zxf16w_dbsk_auft-status = pv_status.
+    PERFORM save.
+  ELSE.
+    MESSAGE text-007 TYPE 'E'.
+  ENDIF.
+ENDFORM.
+
+FORM switch_modus.
+
+  IF zxf16w_dbsk_auft-status <> 'A' AND
+      gv_display_only IS NOT INITIAL.
+    EXIT.
+  ENDIF.
+
+  IF gv_display_only IS INITIAL.
+    gv_display_only = 'X'.
+    MOVE-CORRESPONDING gt_produkt_detail_saved TO gt_produkt_detail.
+    MOVE-CORRESPONDING gs_auftrag_detail_saved TO gs_auftrag.
+    DESCRIBE TABLE gt_produkt_detail LINES produkt_control-lines.
+
+    CLEAR gt_produkt_detail_saved.
+    CLEAR gs_auftrag_detail_saved.
+  ELSE.
+    CLEAR gv_display_only.
+    MOVE-CORRESPONDING gt_produkt_detail TO gt_produkt_detail_saved.
+    MOVE-CORRESPONDING gs_auftrag TO gs_auftrag_detail_saved.
+  ENDIF.
+ENDFORM.
+
+FORM lookup_input.
+
+  FIELD-SYMBOLS: <fs_produkt> LIKE gs_produkt_detail.
+
+  SELECT SINGLE * INTO CORRESPONDING FIELDS OF zxf16w_dbsk_kund
+    FROM zxf16w_dbsk_kund
+   WHERE kunden_id = zxf16w_dbsk_auft-kunde_id.
+
+  LOOP AT gt_produkt_detail ASSIGNING <fs_produkt>.
+    SELECT SINGLE * INTO CORRESPONDING FIELDS OF <fs_produkt>
+      FROM zxf16w_dbsk_prod
+     WHERE produkt_id = <fs_produkt>-produkt_id.
+  ENDLOOP.
+ENDFORM.
+
+FORM check_input.
+  FIELD-SYMBOLS: <fs_produkt> LIKE gs_produkt_detail.
+
+  SELECT SINGLE * INTO CORRESPONDING FIELDS OF zxf16w_dbsk_kund
+    FROM zxf16w_dbsk_kund
+   WHERE kunden_id = zxf16w_dbsk_auft-kunde_id.
+
+  IF sy-subrc <> 0.
+    MESSAGE text-003 TYPE 'E'.
+  ENDIF.
+
+  LOOP AT gt_produkt_detail ASSIGNING <fs_produkt>.
+    SELECT SINGLE * INTO CORRESPONDING FIELDS OF <fs_produkt>
+      FROM zxf16w_dbsk_prod
+     WHERE produkt_id = <fs_produkt>-produkt_id.
+    IF sy-subrc <> 0.
+      MESSAGE text-002 TYPE 'E'.
+    ENDIF.
+    IF <fs_produkt>-anzahl < 1.
+      MESSAGE text-004 TYPE 'E'.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+
+FORM remove_old_input.
+  DELETE FROM zxf16w_dbsk_auft WHERE auftrag_id = zxf16w_dbsk_auft-auftrag_id.
+
+  DELETE FROM zxf16w_dbsk_posi WHERE auftrag_id = zxf16w_dbsk_auft-auftrag_id.
+ENDFORM.
+
+FORM save.
+  PERFORM check_input.
+  PERFORM remove_old_input.
+  PERFORM save_input.
+ENDFORM.
+
+FORM save_input.
+
+  DATA: ls_postion TYPE ts_position.
+
+  FIELD-SYMBOLS: <fs_produkt> LIKE gs_produkt_detail.
+
+  INSERT INTO zxf16w_dbsk_auft VALUES zxf16w_dbsk_auft.
+
+  LOOP AT gt_produkt_detail ASSIGNING <fs_produkt>.
+    CLEAR ls_postion.
+    ls_postion-auftrag_id = zxf16w_dbsk_auft-auftrag_id.
+    ls_postion-pos = sy-tabix.
+    ls_postion-produkt_id = <fs_produkt>-produkt_id.
+    ls_postion-anzahl = <fs_produkt>-anzahl.
+    INSERT INTO zxf16w_dbsk_posi VALUES ls_postion.
+    IF sy-subrc <> 0.
+      MESSAGE text-005 TYPE 'E'.
+    ENDIF.
+  ENDLOOP.
+
+  MODIFY gt_auftrag FROM zxf16w_dbsk_auft INDEX gv_index.
+
+  call METHOD go_alv->refresh_table_display.
+
+  MESSAGE text-006 TYPE 'S'.
+
+ENDFORM.
+
+FORM remove_lines.
+
+  FIELD-SYMBOLS: <lfs_produkt> TYPE ts_produkt_tab.
+
+  LOOP AT gt_produkt_detail ASSIGNING <lfs_produkt>.
+    IF <lfs_produkt>-mark IS NOT INITIAL.
+      DELETE gt_produkt_detail INDEX sy-tabix.
+    ENDIF.
+  ENDLOOP.
+
+  DESCRIBE TABLE gt_produkt_detail LINES produkt_control-lines.
+
+ENDFORM.
+
+FORM append_empty_line .
+  APPEND INITIAL LINE TO gt_produkt_detail.
+  DESCRIBE TABLE gt_produkt_detail LINES produkt_control-lines.
+ENDFORM.
+
+FORM modify_produkt.
+  MODIFY gt_produkt_detail FROM gs_produkt_detail INDEX produkt_control-current_line.
+  PERFORM lookup_input.
+ENDFORM.
+
+MODULE status_1001 OUTPUT.
+  SET PF-STATUS '1001'.
+  SET TITLEBAR '1001'.
+ENDMODULE.
+
+MODULE user_command_1001 INPUT.
+  PERFORM user_command_1001.
+ENDMODULE.
+
+MODULE user_command_1100 INPUT.
+  PERFORM user_command_1100.
+ENDMODULE.
+
+MODULE status_1100 OUTPUT.
+  IF gv_display_only IS INITIAL.
+    SET PF-STATUS '1102'.
+    SET TITLEBAR '112'.
+  ELSE.
+    SET PF-STATUS '1101'.
+    SET TITLEBAR '111'.
+
+    LOOP AT SCREEN.
+      IF screen-group1 = '001'.
+        screen-input = '0'.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDLOOP.
+
+  ENDIF.
+ENDMODULE.
+
+MODULE lookup_input OUTPUT.
+  PERFORM lookup_input.
+ENDMODULE.
+
+MODULE modify_produkt INPUT.
+  PERFORM modify_produkt.
+ENDMODULE.

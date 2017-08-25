@@ -1,0 +1,185 @@
+*&---------------------------------------------------------------------*
+*& Report  ZXF16W_LN_DBSK_PROD
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zxf16w_ln_dbsk_prod01.
+
+TABLES: zxf16w_dbsk_prod.
+
+DATA: gs_saved_prod TYPE zxf16w_dbsk_prod_s,
+      gv_okcode     LIKE sy-ucomm.
+
+zxf16w_dbsk_prod-mandt = sy-mandt.
+
+CALL SCREEN 1000.
+
+* Returns 0 if anything is ok.
+FORM check_input.
+  PERFORM check_currency USING zxf16w_dbsk_prod-preis_einmal_w.
+  PERFORM check_currency USING zxf16w_dbsk_prod-preis_jaerlich_w.
+
+ENDFORM.
+
+FORM check_input_create.
+  DATA: ls_podukt TYPE zxf16w_dbsk_prod_s.
+
+  SELECT SINGLE * INTO CORRESPONDING FIELDS OF ls_podukt
+    FROM zxf16w_dbsk_prod
+   WHERE name = zxf16w_dbsk_prod-name.
+
+  IF sy-subrc = 0 OR zxf16w_dbsk_prod-name IS INITIAL.
+    MESSAGE text-001 TYPE 'E'.
+  ENDIF.
+
+  PERFORM check_input.
+ENDFORM.
+
+FORM check_input_save.
+  DATA: lv_name_new  TYPE zxf16w_dbsk_produkt_name,
+        lv_name_orig TYPE zxf16w_dbsk_produkt_name.
+
+  SELECT SINGLE name into lv_name_orig
+    FROM zxf16w_dbsk_prod
+   WHERE produkt_id = zxf16w_dbsk_prod-produkt_id.
+
+  SELECT SINGLE name INTO lv_name_new
+    FROM zxf16w_dbsk_prod
+   WHERE name = zxf16w_dbsk_prod-name.
+
+  IF sy-subrc = 0 OR zxf16w_dbsk_prod-name IS INITIAL.
+    Message e001(ZXF16W_LN_DBSK_MSG).
+  ENDIF.
+ENDFORM.
+
+FORM check_currency USING p_waers TYPE ZXF16W_DBSK_WAEHRUNG.
+  CALL FUNCTION 'CMS_API_GENERAL_CURRENCY_CHECK'
+    EXPORTING
+      i_waers          = p_waers
+    EXCEPTIONS
+      invalid_currency = 1
+*     OTHERS           = 2
+    .
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.
+
+FORM insert_input.
+
+  DATA: lv_product_id TYPE zxf16w_dbsk_produkt_id,
+        lv_retcode    TYPE inri-returncode.
+
+  sy-subrc = 0.
+
+CALL FUNCTION 'ZXF16W_LN_DBSK_GENERATE_ID'
+  EXPORTING
+   object        =   'ZXF16WPROD'
+ IMPORTING
+   ID            = lv_product_id.
+
+
+
+  zxf16w_dbsk_prod-produkt_id = lv_product_id.
+
+  INSERT INTO zxf16w_dbsk_prod VALUES zxf16w_dbsk_prod.
+
+  gs_saved_prod = zxf16w_dbsk_prod.
+  MESSAGE text-004 TYPE 'S'.
+
+ENDFORM.
+
+FORM save_input.
+
+  UPDATE zxf16w_dbsk_prod.
+
+  IF sy-subrc = 0.
+    MESSAGE text-006 TYPE 'S'.
+    gs_saved_prod = zxf16w_dbsk_prod.
+  ELSE.
+    MESSAGE text-005 TYPE 'E'.
+  ENDIF.
+
+ENDFORM.
+
+FORM exit.
+  DATA: lv_answer TYPE c.
+
+      IF gs_saved_prod NE zxf16w_dbsk_prod.
+      CALL FUNCTION 'POPUP_TO_CONFIRM'
+        EXPORTING
+          text_question               = text-008
+       IMPORTING
+         ANSWER                      = lv_answer
+                .
+      IF lv_answer = '1'.
+        LEAVE TO SCREEN 0.
+      ENDIF.
+
+    ELSE.
+      LEAVE TO SCREEN 0.
+    ENDIF.
+
+
+ENDFORM.
+
+FORM process_input CHANGING p_okcode LIKE sy-ucomm.
+  DATA: lv_okcode LIKE sy-ucomm.
+
+  lv_okcode = p_okcode.
+  CLEAR p_okcode.
+
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+    WHEN 'SAVE'.
+
+      IF zxf16w_dbsk_prod-produkt_id IS INITIAL.
+        PERFORM check_input_create.
+        PERFORM insert_input.
+      ELSE.
+        PERFORM check_input_save.
+        PERFORM save_input.
+      ENDIF.
+    WHEN 'NEW'.
+      CLEAR zxf16w_dbsk_prod.
+    WHEN 'DEL'.
+      DELETE FROM zxf16w_dbsk_prod WHERE produkt_id > 0.
+      DELETE FROM zxf16w_dbsk_pakt WHERE paket_id > 0.
+  ENDCASE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_1000  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_1000 INPUT.
+  PERFORM process_input CHANGING gv_okcode.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  EXIT  INPUT
+*&---------------------------------------------------------------------*
+*       Exits anyway
+*----------------------------------------------------------------------*
+MODULE exit INPUT.
+  PERFORM process_input CHANGING gv_okcode.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_1000  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_1000 OUTPUT.
+  SET PF-STATUS '1000'.
+  SET TITLEBAR '1000'.
+ENDMODULE.

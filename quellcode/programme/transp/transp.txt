@@ -1,0 +1,298 @@
+*&---------------------------------------------------------------------*
+*& Report  ZXF16W_LN_DBSK_TRANSP
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zxf16w_ln_dbsk_transp.
+
+CLASS lcl_user_command DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+      alv_user_command
+                    FOR EVENT double_click OF cl_gui_alv_grid
+        IMPORTING e_row e_column sender.
+
+  PRIVATE SECTION.
+
+ENDCLASS.
+
+DATA: gt_table                 TYPE TABLE OF zxf16w_dbsk_transp_s,
+      go_alv_table             TYPE REF TO cl_gui_alv_grid,
+      go_alv_table_lines       TYPE REF TO cl_gui_alv_grid,
+      go_container_table       TYPE REF TO cl_gui_custom_container,
+      go_container_table_lines TYPE REF TO cl_gui_custom_container,
+      go_alv_user_command      TYPE REF TO lcl_user_command,
+      go_table_lines           TYPE REF TO data,
+      gv_table                 LIKE LINE OF gt_table,
+      gv_okcode                LIKE sy-ucomm.
+
+FIELD-SYMBOLS: <gfs_table_lines> TYPE table.
+
+SELECT tabname INTO TABLE gt_table
+  FROM dd02l
+ WHERE tabname LIKE 'ZXF16W_DBSK_%'
+   AND tabclass = 'TRANSP'.
+
+
+CREATE OBJECT go_container_table
+  EXPORTING
+    container_name = 'CONTAINER'.
+
+CREATE OBJECT go_alv_table
+  EXPORTING
+    i_parent = go_container_table.
+.
+
+CALL METHOD go_alv_table->set_table_for_first_display
+  EXPORTING
+    i_structure_name = 'ZXF16W_DBSK_TRANSP_S'
+  CHANGING
+    it_outtab        = gt_table.
+
+CREATE OBJECT go_alv_user_command.
+SET HANDLER go_alv_user_command->alv_user_command FOR go_alv_table.
+
+CALL SCREEN 1000.
+
+
+CLASS lcl_user_command IMPLEMENTATION.
+  METHOD alv_user_command.
+    PERFORM select_entry CHANGING e_row.
+  ENDMETHOD.                           "handle_user_command
+ENDCLASS.
+
+FORM exit.
+  LEAVE TO SCREEN 0.
+ENDFORM.
+
+FORM select_entry  CHANGING pv_row TYPE lvc_s_row.
+
+  READ TABLE gt_table INTO gv_table INDEX pv_row.
+
+  CREATE DATA go_table_lines TYPE TABLE OF (gv_table).
+  ASSIGN go_table_lines->* TO <gfs_table_lines>.
+
+  SELECT * FROM (gv_table) INTO TABLE <gfs_table_lines>.
+
+  IF go_alv_table_lines IS NOT INITIAL.
+    call METHOD go_alv_table_lines->free.
+    CLEAR go_alv_table_lines.
+  ENDIF.
+
+  IF go_container_table_lines IS NOT INITIAL.
+    call METHOD go_container_table_lines->free.
+    CLEAR go_container_table_lines.
+  ENDIF.
+
+  CALL SCREEN 2000.
+ENDFORM.
+
+FORM show_detail.
+
+  DATA: lv_tabname LIKE dd02l-tabname.
+
+  IF go_container_table_lines IS INITIAL.
+    CREATE OBJECT go_container_table_lines
+        EXPORTING
+          container_name = 'CONTAINER_LINES'.
+  ENDIF.
+
+  IF go_alv_table_lines IS INITIAL.
+    CREATE OBJECT go_alv_table_lines
+    EXPORTING
+      i_parent = go_container_table_lines.
+
+    lv_tabname = gv_table.
+
+    CALL METHOD go_alv_table_lines->set_table_for_first_display
+    EXPORTING
+      i_structure_name = lv_tabname
+    CHANGING
+      it_outtab        = <gfs_table_lines>.
+  ENDIF.
+
+
+ENDFORM.
+
+FORM export.
+
+  DATA: lv_file_name TYPE string,
+        lv_file_path TYPE string,
+        lv_file_full_path TYPE string,
+        lv_window_title TYPE string,
+        lv_default_table_name TYPE string.
+
+  lv_window_title = Text-001.
+  lv_default_table_name = gv_table.
+
+  CALL METHOD cl_gui_frontend_services=>file_save_dialog
+    EXPORTING
+      window_title              = lv_window_title
+      default_extension         = 'txt'
+      default_file_name         = lv_default_table_name
+      prompt_on_overwrite       = 'X'
+    CHANGING
+      filename                  = lv_file_name
+      path                      = lv_file_path
+      fullpath                  = lv_file_full_path
+          .
+  IF lv_file_full_path IS INITIAL.
+    MESSAGE Text-002 TYPE 'E'.
+  ENDIF.
+
+  CALL FUNCTION 'GUI_DOWNLOAD'
+    EXPORTING
+      filename                        = lv_file_full_path
+      filetype                        = 'DAT'
+    tables
+      data_tab                        = <gfs_table_lines>
+            .
+  IF sy-subrc <> 0.
+    MESSAGE Text-003 TYPE 'E'.
+  ENDIF.
+
+ENDFORM.
+
+FORM import.
+
+    DATA: lt_file_table TYPE FILETABLE,
+          lv_file_name TYPE string,
+        lv_file_path TYPE string,
+        lv_file_full_path TYPE string,
+        lv_window_title TYPE string,
+        lv_default_table_name TYPE string,
+        lv_return_code TYPE i,
+        lv_user_action TYPE i,
+        lv_lines TYPE i.
+
+  lv_default_table_name = gv_table.
+  lv_window_title = text-004.
+
+  CALL METHOD cl_gui_frontend_services=>file_open_dialog
+    EXPORTING
+      window_title            =     lv_window_title
+      default_extension       =     'txt'
+      default_filename        =     lv_default_table_name
+      multiselection          =     ' '
+    CHANGING
+      file_table              =     lt_file_table
+      rc                      =     lv_return_code
+      user_action             =     lv_user_action" Benutzeraktion( s. Kl.konstanten ACTION_OK, ACTION_CANCEL)
+    .
+  IF lv_user_action = cl_gui_frontend_services=>action_cancel.
+    MESSAGE Text-002 TYPE 'E'.
+  ENDIF.
+
+  DESCRIBE TABLE lt_file_table LINES lv_lines.
+
+  IF  lv_lines <> 1.
+    MESSAGE Text-003 TYPE 'E'.
+  ENDIF.
+
+  READ TABLE lt_file_table INTO lv_file_full_path INDEX 1.
+
+  CLEAR <gfs_table_lines>.
+
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      filename                      = lv_file_full_path
+      filetype                      = 'DAT'
+    tables
+      data_tab                      = <gfs_table_lines>
+    EXCEPTIONS
+     FILE_OPEN_ERROR               = 1
+     FILE_READ_ERROR               = 2
+     NO_BATCH                      = 3
+     GUI_REFUSE_FILETRANSFER       = 4
+     INVALID_TYPE                  = 5
+     NO_AUTHORITY                  = 6
+     UNKNOWN_ERROR                 = 7
+     BAD_DATA_FORMAT               = 8
+     HEADER_NOT_ALLOWED            = 9
+     SEPARATOR_NOT_ALLOWED         = 10
+     HEADER_TOO_LONG               = 11
+     UNKNOWN_DP_ERROR              = 12
+     ACCESS_DENIED                 = 13
+     DP_OUT_OF_MEMORY              = 14
+     DISK_FULL                     = 15
+     DP_TIMEOUT                    = 16
+     OTHERS                        = 17
+      .
+
+  DELETE FROM (gv_table).
+
+  PERFORM wtf USING <gfs_table_lines>.
+
+  call METHOD go_alv_table_lines->refresh_table_display.
+
+ENDFORM.
+
+FORM wtf USING pt_tab TYPE STANDARD TABLE.
+  Insert (gv_table) FROM TABLE pt_tab.
+  IF sy-subrc <> 0.
+    ROLLBACK WORK.
+    MESSAGE Text-003 TYPE 'E'.
+  ENDIF.
+ENDFORM.
+
+FORM user_command_1000.
+  DATA: lv_okcode LIKE gv_okcode.
+
+  lv_okcode = gv_okcode.
+  CLEAR gv_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+  ENDCASE.
+ENDFORM.
+
+FORM user_command_2000.
+  DATA: lv_okcode LIKE gv_okcode.
+
+  lv_okcode = gv_okcode.
+  CLEAR gv_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+    WHEN 'EXPO'.
+      PERFORM export.
+    WHEN 'IMPO'.
+      PERFORM import.
+  ENDCASE.
+ENDFORM.
+
+MODULE status_1000 OUTPUT.
+  SET PF-STATUS '1000'.
+  SET TITLEBAR '100'.
+ENDMODULE.
+
+MODULE user_command_1000 INPUT.
+  PERFORM user_command_1000.
+ENDMODULE.
+
+MODULE status_2000 OUTPUT.
+  SET PF-STATUS '2000'.
+  SET TITLEBAR '200'.
+ENDMODULE.
+
+MODULE user_command_2000 INPUT.
+  PERFORM user_command_2000.
+ENDMODULE.
+
+MODULE display_lines OUTPUT.
+  PERFORM show_detail.
+ENDMODULE.

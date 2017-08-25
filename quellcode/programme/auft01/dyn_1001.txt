@@ -1,0 +1,28 @@
+PROCESS BEFORE OUTPUT.
+
+  LOOP AT   gt_produkte
+       INTO gs_produkte
+       WITH CONTROL produkt_control
+       CURSOR produkt_control-current_line.
+  ENDLOOP.
+
+  MODULE set_line_count.
+  MODULE status_1001.
+*
+PROCESS AFTER INPUT.
+
+  LOOP AT gt_produkte.
+    FIELD gs_produkte-produkt_id.
+    FIELD gs_produkte-paket_id.
+    FIELD gs_produkte-name.
+    FIELD gs_produkte-preis_einmal.
+    FIELD gs_produkte-preis_einmal_w.
+    FIELD gs_produkte-preis_jaerlich.
+    FIELD gs_produkte-preis_jaerlich_w.
+    MODULE modify_produkt.
+  ENDLOOP.
+
+  MODULE user_command_1001.
+  MODULE set_line_count.
+  MODULE lookup_input.
+  MODULE user_command_1001 AT EXIT-COMMAND.

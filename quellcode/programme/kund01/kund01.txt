@@ -1,0 +1,74 @@
+*&---------------------------------------------------------------------*
+*& Report  ZXF16W_LN_DBSK_KUND01
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zxf16w_ln_dbsk_kund01.
+
+TABLES: zxf16w_dbsk_kund.
+
+DATA: gv_okcode LIKE sy-ucomm.
+
+CALL SCREEN 1000.
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_1000  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_1000 OUTPUT.
+  SET PF-STATUS '1001'.
+  SET TITLEBAR '101'.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_1000  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_1000 INPUT.
+  PERFORM process_input CHANGING gv_okcode.
+ENDMODULE.
+
+FORM process_input CHANGING p_okcode LIKE sy-ucomm.
+  DATA: lv_okcode LIKE sy-ucomm.
+
+  lv_okcode = p_okcode.
+  CLEAR p_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+    WHEN 'SAVE'.
+      PERFORM save_input.
+    WHEN 'NEW'.
+
+    WHEN 'DEL'.
+*      delete from zxf16w_dbsk_kund where kunden_id >= 0.
+  ENDCASE.
+ENDFORM.
+
+FORM save_input.
+  CALL FUNCTION 'ZXF16W_LN_DBSK_GENERATE_ID'
+    EXPORTING
+      object = 'ZXF16WKUND'
+    IMPORTING
+      id     = zxf16w_dbsk_kund-kunden_id.
+  INSERT INTO zxf16w_dbsk_kund VALUES zxf16w_dbsk_kund.
+  IF sy-subrc <> 0.
+    MESSAGE text-001 TYPE 'E'.
+  ELSE.
+    MESSAGE text-002 TYPE 'S'.
+  ENDIF.
+ENDFORM.
+
+FORM exit.
+  LEAVE TO SCREEN 0.
+ENDFORM.
+MODULE exit INPUT.
+  PERFORM process_input CHANGING gv_okcode.
+ENDMODULE.

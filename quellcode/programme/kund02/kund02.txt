@@ -1,0 +1,239 @@
+*&---------------------------------------------------------------------*
+*& Report  ZXF16W_LN_DBSK_KUND02
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zxf16w_ln_dbsk_kund02.
+
+CLASS lcl_user_command DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+      alv_user_command
+                    FOR EVENT double_click OF cl_gui_alv_grid
+        IMPORTING e_row e_column sender.
+
+  PRIVATE SECTION.
+
+ENDCLASS.
+
+TABLES: zxf16w_dbsk_kund.
+
+DATA: gt_kunden           TYPE TABLE OF zxf16w_dbsk_kund_s,
+      gt_fcat             TYPE lvc_t_fcat,
+      go_alv              TYPE REF TO cl_gui_alv_grid,
+      go_container        TYPE REF TO cl_gui_custom_container,
+      go_alv_user_command TYPE REF TO lcl_user_command,
+      gv_okcode           LIKE sy-ucomm,
+      gv_lines            TYPE i,
+      gv_index            TYPE i.
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME.
+SELECT-OPTIONS: s_knd_id FOR zxf16w_dbsk_kund-kunden_id,
+                s_vname FOR zxf16w_dbsk_kund-vorname,
+                s_nname FOR zxf16w_dbsk_kund-nachname,
+                s_anschr FOR zxf16w_dbsk_kund-anschrift,
+                s_konto FOR zxf16w_dbsk_kund-konto.
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME.
+PARAMETERS: s_shw_id TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_vn TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_nn TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_an TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_kn TYPE c AS CHECKBOX DEFAULT 'X'.
+SELECTION-SCREEN END OF BLOCK b2.
+
+SELECT *
+  FROM zxf16w_dbsk_kund
+  INTO CORRESPONDING FIELDS OF TABLE gt_kunden
+  WHERE kunden_id IN s_knd_id
+  AND vorname IN s_vname
+  AND nachname IN s_nname
+  AND anschrift IN s_anschr
+  AND konto IN s_konto.
+
+CREATE OBJECT go_container
+  EXPORTING
+    container_name = 'CONTAINER'.
+IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+ENDIF.
+
+PERFORM create_catalog CHANGING gt_fcat.
+
+CREATE OBJECT go_alv
+  EXPORTING
+    i_parent = go_container.
+IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+ENDIF.
+
+CREATE OBJECT go_alv_user_command.
+
+SET HANDLER go_alv_user_command->alv_user_command FOR go_alv.
+
+CALL METHOD go_alv->set_table_for_first_display
+  EXPORTING
+    i_structure_name = 'ZXF16W_DBSK_KUND_S'
+  CHANGING
+    it_outtab        = gt_kunden
+    it_fieldcatalog  = gt_fcat.
+IF sy-subrc <> 0.
+* Implement suitable error handling here
+ENDIF.
+
+DESCRIBE TABLE gt_kunden LINES gv_lines.
+
+IF gv_lines = 1.
+  READ TABLE gt_kunden INTO zxf16w_dbsk_kund INDEX 1.
+  gv_index = 1.
+  CALL SCREEN 1100.
+ELSE.
+  CALL SCREEN 1001.
+ENDIF.
+
+
+
+
+CLASS lcl_user_command IMPLEMENTATION.
+  METHOD alv_user_command.
+    READ TABLE gt_kunden INTO zxf16w_dbsk_kund INDEX e_row.
+    gv_index = e_row.
+    CALL SCREEN 1100.
+  ENDMETHOD.
+ENDCLASS.
+
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_1001  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_1001 OUTPUT.
+  SET PF-STATUS '1001'.
+  SET TITLEBAR '101'.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_1001  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_1001 INPUT.
+  PERFORM user_command_1001 CHANGING gv_okcode.
+ENDMODULE.
+
+FORM user_command_1001 CHANGING gv_okcode LIKE sy-ucomm.
+  DATA lv_okcode LIKE sy-ucomm.
+  lv_okcode = gv_okcode.
+  CLEAR gv_okcode.
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+    WHEN OTHERS.
+  ENDCASE.
+ENDFORM.
+
+FORM exit.
+  LEAVE TO SCREEN 0.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_1100  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_1100 OUTPUT.
+  SET PF-STATUS '1101'.
+  SET TITLEBAR '111'.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_1100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_1100 INPUT.
+  PERFORM user_command_1100 CHANGING gv_okcode.
+ENDMODULE.
+
+FORM user_command_1100 CHANGING gv_okcode LIKE sy-ucomm.
+  DATA: lv_okcode LIKE sy-ucomm.
+  lv_okcode = gv_okcode.
+  CLEAR gv_okcode.
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+    WHEN 'SAVE'.
+      UPDATE zxf16w_dbsk_kund.
+      MESSAGE text-001 TYPE 'S'.
+      SELECT *
+        FROM zxf16w_dbsk_kund
+        INTO CORRESPONDING FIELDS OF TABLE gt_kunden
+        WHERE kunden_id IN s_knd_id.
+      CALL METHOD go_alv->refresh_table_display.
+    WHEN 'DEL'.
+      DELETE FROM zxf16w_dbsk_kund WHERE kunden_id = zxf16w_dbsk_kund-kunden_id.
+      DELETE gt_kunden INDEX gv_index.
+      CALL METHOD go_alv->refresh_table_display.
+      MESSAGE text-003 TYPE 'S'.
+      LEAVE TO SCREEN 0.
+  ENDCASE.
+ENDFORM.
+
+FORM create_catalog  CHANGING pt_fcat TYPE lvc_t_fcat.
+  FIELD-SYMBOLS: <fs_fcat> LIKE LINE OF gt_fcat.
+
+  CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_structure_name       = 'ZXF16W_DBSK_KUND_S'
+    CHANGING
+      ct_fieldcat            = pt_fcat
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+  IF sy-subrc <> 0.
+    MESSAGE text-004 TYPE 'E'.
+  ENDIF.
+
+
+  LOOP AT pt_fcat ASSIGNING <fs_fcat>.
+    IF    <fs_fcat>-fieldname = 'KUNDEN_ID'
+     AND  s_shw_id IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-fieldname = 'VORNAME'
+     AND  s_shw_vn IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-fieldname = 'NACHNAME'
+     AND  s_shw_nn IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-fieldname = 'ANSCHRIFT'
+     AND  s_shw_an IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-fieldname = 'KONTO'
+     AND  s_shw_kn IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+  ENDLOOP.
+ENDFORM.

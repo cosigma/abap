@@ -1,0 +1,19 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZXF16W_LN_DBSK_PAKT01_I01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_1001  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_1001 INPUT.
+  PERFORM user_command_1001 CHANGING gv_okcode.
+ENDMODULE.
+
+MODULE modify_produkt_tab INPUT.
+  PERFORM modify_produkt USING gs_produkt.
+ENDMODULE.
+
+MODULE SET_LINE_COUNT INPUT.
+  PERFORM set_line_count.
+ENDMODULE.

@@ -1,0 +1,321 @@
+*&---------------------------------------------------------------------*
+*& Report  ZXF16W_LN_DBSK_PROD02
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zxf16w_ln_dbsk_prod02.
+
+CLASS lcl_user_command DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+      alv_user_command
+                    FOR EVENT double_click OF cl_gui_alv_grid
+        IMPORTING e_row e_column sender.
+
+  PRIVATE SECTION.
+
+ENDCLASS.
+
+
+TABLES: zxf16w_dbsk_prod.
+
+DATA: gt_produkt          TYPE TABLE OF zxf16w_dbsk_prod,
+      gt_fcat             TYPE lvc_t_fcat,
+      gs_saved_produkt    LIKE LINE OF gt_produkt,
+      gv_okcode           LIKE sy-ucomm,
+      gv_display_only     TYPE c,
+      gv_lines            TYPE i,
+      go_container        TYPE REF TO cl_gui_custom_container,
+      go_alv              TYPE REF TO cl_gui_alv_grid,
+      go_alv_user_command TYPE REF TO lcl_user_command,
+      gv_index            TYPE i.
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME.
+SELECT-OPTIONS: s_prd_id FOR zxf16w_dbsk_prod-produkt_id,
+                s_name FOR zxf16w_dbsk_prod-name,
+                s_pr_e FOR zxf16w_dbsk_prod-preis_einmal,
+                s_pr_e_w FOR zxf16w_dbsk_prod-preis_einmal_w,
+                s_pr_j FOR zxf16w_dbsk_prod-preis_jaerlich,
+                s_pr_j_w FOR zxf16w_dbsk_prod-preis_jaerlich_w.
+SELECTION-SCREEN END OF BLOCK b1.
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME.
+PARAMETERS: s_shw_id TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_pi TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_na TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_pe TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_pj TYPE c AS CHECKBOX DEFAULT 'X'.
+SELECTION-SCREEN END OF BLOCK b2.
+
+SELECT * INTO CORRESPONDING FIELDS OF TABLE gt_produkt
+  FROM zxf16w_dbsk_prod
+ WHERE produkt_id IN s_prd_id
+   AND name IN s_name
+   AND preis_einmal IN s_pr_e
+   AND preis_einmal_w IN s_pr_e_w
+   AND preis_jaerlich IN s_pr_j
+   AND preis_jaerlich_w IN s_pr_j_w.
+
+CREATE OBJECT go_container
+  EXPORTING
+    container_name = 'CONTAINER'.
+
+PERFORM create_catalog CHANGING gt_fcat.
+
+
+CREATE OBJECT go_alv
+  EXPORTING
+    i_parent = go_container.
+CALL METHOD go_alv->set_table_for_first_display
+*  EXPORTING
+*    i_structure_name = 'ZXF16W_DBSK_PROD_S'
+*   is_variant       =
+*   i_save           =
+*   i_default        = 'X'
+*   is_layout        =
+  CHANGING
+    it_outtab        = gt_produkt
+    it_fieldcatalog  = gt_fcat
+*   it_sort          =
+*   it_filter        =
+*  EXCEPTIONS
+*   invalid_parameter_combination = 1
+*   program_error    = 2
+*   too_many_lines   = 3
+*   others           = 4
+  .
+
+CREATE OBJECT go_alv_user_command.
+
+SET HANDLER go_alv_user_command->alv_user_command FOR go_alv.
+
+gv_display_only = 'X'.
+IF sy-tcode = 'ZXF16W_DBSK_PROD02'.
+  CLEAR gv_display_only.
+ENDIF.
+
+DESCRIBE TABLE gt_produkt LINES gv_lines.
+
+IF gv_lines = 1.
+  READ TABLE gt_produkt INTO zxf16w_dbsk_prod INDEX 1.
+  gv_index = 1.
+  CALL SCREEN 1100.
+ELSE.
+  CALL SCREEN 1001.
+ENDIF.
+
+
+
+CLASS lcl_user_command IMPLEMENTATION.
+  METHOD alv_user_command.
+    READ TABLE gt_produkt INTO zxf16w_dbsk_prod INDEX e_row.
+    gv_index = e_row.
+    CALL SCREEN 1100.
+  ENDMETHOD.                           "handle_user_command
+*-----------------------------------------------------------------
+ENDCLASS.
+
+FORM user_command_1001 CHANGING p_okcode LIKE sy-ucomm.
+  DATA: lv_okcode LIKE sy-ucomm.
+
+  lv_okcode = gv_okcode.
+  CLEAR gv_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      LEAVE TO SCREEN 0.
+    WHEN 'EXIT'.
+      LEAVE TO SCREEN 0.
+    WHEN 'CANC'.
+      LEAVE TO SCREEN 0.
+  ENDCASE.
+
+ENDFORM.
+
+FORM user_command_1100 CHANGING p_okcode LIKE sy-ucomm.
+  DATA: lv_okcode LIKE sy-ucomm.
+
+  lv_okcode = gv_okcode.
+  CLEAR gv_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      LEAVE TO SCREEN 0.
+    WHEN 'EXIT'.
+      LEAVE TO SCREEN 0.
+    WHEN 'CANC'.
+      LEAVE TO SCREEN 0.
+    WHEN 'SAVE'.
+      IF gv_display_only IS INITIAL.
+        PERFORM save_produkt.
+      ENDIF.
+    WHEN 'DELP'.
+      IF gv_display_only IS INITIAL.
+        PERFORM delete_produkt.
+      ENDIF.
+    WHEN 'MODI'.
+      IF gv_display_only IS INITIAL.
+        gv_display_only = 'X'.
+        CLEAR gs_saved_produkt.
+      ELSE.
+        CLEAR gv_display_only.
+        gs_saved_produkt = zxf16w_dbsk_prod.
+      ENDIF.
+
+  ENDCASE.
+
+ENDFORM.
+
+FORM save_produkt.
+  IF zxf16w_dbsk_prod <> gs_saved_produkt.
+    PERFORM check_input.
+    UPDATE zxf16w_dbsk_prod.
+    MODIFY gt_produkt FROM zxf16w_dbsk_prod INDEX gv_index.
+
+    CALL METHOD go_alv->refresh_table_display.
+    MESSAGE text-001 TYPE 'S'.
+  ELSE.
+    MESSAGE text-002 TYPE 'W'.
+  ENDIF.
+
+
+ENDFORM.
+
+FORM delete_produkt.
+  DELETE FROM zxf16w_dbsk_prod WHERE produkt_id = zxf16w_dbsk_prod-produkt_id.
+
+  DELETE gt_produkt INDEX gv_index.
+
+  CALL METHOD go_alv->refresh_table_display.
+
+  LEAVE TO SCREEN 0.
+
+ENDFORM.
+
+FORM check_input.
+  DATA: lv_name_new  TYPE zxf16w_dbsk_produkt_name.
+
+  IF gs_saved_produkt-name <> zxf16w_dbsk_prod-name.
+
+    SELECT SINGLE name INTO lv_name_new
+      FROM zxf16w_dbsk_prod
+     WHERE name = zxf16w_dbsk_prod-name.
+
+    IF sy-subrc = 0 OR
+      zxf16w_dbsk_prod-name IS INITIAL.
+      MESSAGE text-003 TYPE 'E'.
+    ENDIF.
+
+  ENDIF.
+
+ENDFORM.
+
+*----------------------------------------------------------------------*
+FORM create_catalog  CHANGING pt_fcat TYPE lvc_t_fcat.
+  FIELD-SYMBOLS: <fs_fcat> LIKE LINE OF gt_fcat.
+
+  CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_structure_name       = 'ZXF16W_DBSK_PROD_S'
+    CHANGING
+      ct_fieldcat            = pt_fcat
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+  IF sy-subrc <> 0.
+      MESSAGE text-004 TYPE 'E'.
+  ENDIF.
+
+
+  LOOP AT pt_fcat ASSIGNING <fs_fcat>.
+    IF    <fs_fcat>-FIELDNAME = 'PRODUKT_ID'
+     AND  s_shw_id IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'PAKET_ID'
+     AND  s_shw_pi IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'NAME'
+     AND  s_shw_na IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'PREIS_EINMAL'
+     AND  s_shw_pe IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'PREIS_EINMAL_W'
+     AND  s_shw_pe IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'PREIS_JAERLICH'
+     AND  s_shw_pj IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'PREIS_JAERLICH_W'
+     AND  s_shw_pj IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_1001  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_1001 OUTPUT.
+  SET PF-STATUS '1001'.
+  SET TITLEBAR '101'.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_1001  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_1001 INPUT.
+  PERFORM user_command_1001 CHANGING gv_okcode.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_1100  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_1100 OUTPUT.
+  IF gv_display_only = 'X'.
+    SET PF-STATUS '1101'.
+    SET TITLEBAR '111'.
+    LOOP AT SCREEN.
+* DISABLE ELEMENTS DYNAMICLY
+      IF screen-group1 = '001'.
+        screen-input = '0'.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDLOOP.
+  ELSE.
+    SET PF-STATUS '1102'.
+    SET TITLEBAR '112'.
+  ENDIF.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_1100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_1100 INPUT.
+  PERFORM user_command_1100 CHANGING gv_okcode.
+ENDMODULE.

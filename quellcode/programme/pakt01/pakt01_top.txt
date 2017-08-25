@@ -1,0 +1,21 @@
+*&---------------------------------------------------------------------*
+*& Include ZXF16W_LN_DBSK_PAKT01_TOP                         Modulpool        ZXF16W_LN_DBSK_PAKT01
+*&
+*&---------------------------------------------------------------------*
+PROGRAM zxf16w_ln_dbsk_pakt01.
+
+TABLES: zxf16w_dbsk_prod.
+
+CONTROLS: produkt_tab TYPE TABLEVIEW USING SCREEN 1001.
+
+TYPES: BEGIN OF ts_produkt,
+        mark TYPE c.
+        INCLUDE STRUCTURE zxf16w_dbsk_prod_s.
+TYPES: END OF ts_produkt.
+
+DATA: gt_produkt             TYPE TABLE OF ts_produkt,
+      gt_saved_produkt       TYPE TABLE OF zxf16w_dbsk_prod_s,
+      gs_produkt             TYPE ts_produkt,
+      gs_saved_produkt_paket TYPE zxf16w_dbsk_prod_s,
+      gs_produkt_paket       TYPE zxf16w_dbsk_prod_s,
+      gv_okcode              LIKE sy-ucomm.

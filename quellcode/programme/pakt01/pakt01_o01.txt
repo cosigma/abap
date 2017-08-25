@@ -1,0 +1,24 @@
+*----------------------------------------------------------------------*
+***INCLUDE ZXF16W_LN_DBSK_PAKT01_O01.
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_1001  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_1001 OUTPUT.
+  SET PF-STATUS '1001'.
+  SET TITLEBAR '101'.
+ENDMODULE.
+
+MODULE change_line OUTPUT.
+  PERFORM swap_line.
+ENDMODULE.
+
+MODULE modify_produkt_tab OUTPUT.
+  PERFORM modify_line.
+ENDMODULE.
+
+MODULE SET_LINE_COUNT OUTPUT.
+  PERFORM set_line_count.
+ENDMODULE.

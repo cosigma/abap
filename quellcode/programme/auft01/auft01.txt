@@ -1,0 +1,224 @@
+*&---------------------------------------------------------------------*
+*& Report  ZXF16W_LN_DBSK_AUFT01
+*&
+REPORT zxf16w_ln_dbsk_auft01.
+
+TABLES: zxf16w_dbsk_prod,
+        zxf16w_dbsk_kund,
+        zxf16w_dbsk_auft,
+        zxf16w_dbsk_posi.
+
+CONTROLS: produkt_control TYPE TABLEVIEW USING SCREEN 1001.
+
+TYPES: BEGIN OF ts_produkt,
+         mark TYPE c.
+        INCLUDE STRUCTURE zxf16w_dbsk_prod_s.
+TYPES:  anzahl LIKE zxf16w_dbsk_posi-anzahl.
+TYPES: END OF ts_produkt.
+
+TYPES: BEGIN OF ts_position.
+        INCLUDE STRUCTURE zxf16w_dbsk_posi.
+TYPES: END OF ts_position.
+
+DATA: gt_produkte TYPE TABLE OF ts_produkt,
+      gs_produkte LIKE LINE OF gt_produkte,
+      gv_okcode   LIKE sy-ucomm,
+      gv_saved    TYPE c.
+
+PERFORM add_empty_line.
+
+CLEAR gv_saved.
+
+zxf16w_dbsk_auft-bestelldatum = sy-datum.
+
+CALL SCREEN 1001.
+
+FORM exit.
+  LEAVE TO SCREEN 0.
+ENDFORM.
+
+FORM user_command_1001 CHANGING pv_okcode LIKE sy-ucomm.
+  DATA: lv_okcode LIKE gv_okcode.
+
+  lv_okcode = gv_okcode.
+  CLEAR gv_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+    WHEN 'SAVE'.
+      PERFORM save.
+    WHEN 'ADDL'.
+      PERFORM add_empty_line.
+    WHEN 'DELL'.
+      PERFORM remove_marked_line.
+    WHEN OTHERS.
+  ENDCASE.
+
+
+ENDFORM.
+
+FORM save.
+  PERFORM check_input.
+  IF gv_saved IS NOT INITIAL.
+    PERFORM remove_old_input.
+  ENDIF.
+  PERFORM save_input.
+ENDFORM.
+
+FORM set_line_count.
+  DESCRIBE TABLE gt_produkte LINES produkt_control-lines.
+ENDFORM.
+
+FORM sawp_current_line.
+  produkt_control-current_line = sy-loopc.
+ENDFORM.
+
+FORM modify_produkt.
+  MODIFY gt_produkte FROM gs_produkte INDEX produkt_control-current_line.
+ENDFORM.
+
+FORM add_empty_line.
+  DATA: ls_produkt LIKE gs_produkte.
+  CLEAR ls_produkt.
+  APPEND ls_produkt TO gt_produkte.
+  DESCRIBE TABLE gt_produkte LINES produkt_control-lines.
+ENDFORM.
+
+FORM remove_marked_line .
+  LOOP AT gt_produkte INTO gs_produkte.
+    IF gs_produkte-mark IS NOT INITIAL.
+      DELETE gt_produkte INDEX sy-tabix.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+
+FORM lookup_input.
+
+  FIELD-SYMBOLS: <lfs_produkte> LIKE gs_produkte.
+
+  SELECT SINGLE * INTO CORRESPONDING FIELDS OF zxf16w_dbsk_kund
+    FROM zxf16w_dbsk_kund
+   WHERE kunden_id = zxf16w_dbsk_auft-kunde_id.
+
+  LOOP AT gt_produkte ASSIGNING <lfs_produkte>.
+    SELECT SINGLE * INTO CORRESPONDING FIELDS OF <lfs_produkte>
+      FROM zxf16w_dbsk_prod
+     WHERE produkt_id = <lfs_produkte>-produkt_id.
+  ENDLOOP.
+
+ENDFORM.
+
+FORM check_input.
+
+  DATA: lv_lines TYPE i.
+
+  FIELD-SYMBOLS: <fs_produkte> LIKE gs_produkte.
+
+  SELECT SINGLE * INTO CORRESPONDING FIELDS OF zxf16w_dbsk_kund
+    FROM zxf16w_dbsk_kund
+   WHERE kunden_id = zxf16w_dbsk_auft-kunde_id.
+
+  IF sy-subrc <> 0.
+    MESSAGE text-001 TYPE 'E'.
+  ENDIF.
+
+  DESCRIBE TABLE gt_produkte LINES lv_lines.
+
+  IF lv_lines = 0.
+    MESSAGE text-006 TYPE 'E'.
+  ENDIF.
+
+
+  LOOP AT gt_produkte ASSIGNING <fs_produkte>.
+    SELECT SINGLE * INTO CORRESPONDING FIELDS OF <fs_produkte>
+      FROM zxf16w_dbsk_prod
+     WHERE produkt_id = <fs_produkte>-produkt_id.
+    IF sy-subrc <> 0.
+      MESSAGE text-002 TYPE 'E'.
+    ENDIF.
+    IF <fs_produkte>-anzahl < 1.
+      MESSAGE text-004 TYPE 'E'.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.
+
+FORM save_input.
+
+  DATA: ls_postion TYPE ts_position.
+
+  FIELD-SYMBOLS: <fs_produkte> LIKE gs_produkte.
+
+  IF zxf16w_dbsk_auft-auftrag_id IS INITIAL.
+    CALL FUNCTION 'ZXF16W_LN_DBSK_GENERATE_ID'
+      EXPORTING
+        object = 'ZXF16WPROD'
+      IMPORTING
+        id     = zxf16w_dbsk_auft-auftrag_id.
+
+  ENDIF.
+  zxf16w_dbsk_auft-status = 'A'.
+
+  INSERT INTO zxf16w_dbsk_auft VALUES zxf16w_dbsk_auft.
+
+  LOOP AT gt_produkte ASSIGNING <fs_produkte>.
+    CLEAR ls_postion.
+    ls_postion-auftrag_id = zxf16w_dbsk_auft-auftrag_id.
+    ls_postion-pos = sy-tabix.
+    ls_postion-produkt_id = <fs_produkte>-produkt_id.
+    ls_postion-anzahl = <fs_produkte>-anzahl.
+    INSERT INTO zxf16w_dbsk_posi VALUES ls_postion.
+    IF sy-subrc <> 0.
+      MESSAGE text-002 TYPE 'E'.
+    ENDIF.
+  ENDLOOP.
+
+  MESSAGE text-005 TYPE 'S'.
+
+  gv_saved = 'X'.
+
+ENDFORM.
+
+FORM remove_old_input.
+  DELETE FROM zxf16w_dbsk_auft WHERE auftrag_id = zxf16w_dbsk_auft-auftrag_id.
+
+  DELETE FROM zxf16w_dbsk_posi WHERE auftrag_id = zxf16w_dbsk_auft-auftrag_id.
+ENDFORM.
+
+MODULE user_command_1001 INPUT.
+  PERFORM user_command_1001 CHANGING gv_okcode.
+ENDMODULE.
+
+
+MODULE produkt_control_modify INPUT.
+  MODIFY gt_produkte
+    FROM gs_produkte
+    INDEX produkt_control-current_line.
+ENDMODULE.
+
+MODULE set_line_count OUTPUT.
+  PERFORM set_line_count.
+ENDMODULE.
+
+MODULE set_line_count INPUT.
+  PERFORM set_line_count.
+ENDMODULE.
+
+MODULE modify_produkt INPUT.
+  PERFORM modify_produkt.
+ENDMODULE.
+
+
+MODULE lookup_input INPUT.
+  PERFORM lookup_input.
+ENDMODULE.
+
+MODULE status_1001 OUTPUT.
+  SET PF-STATUS '1001'.
+  SET TITLEBAR '101'.
+ENDMODULE.

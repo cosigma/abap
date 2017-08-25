@@ -1,0 +1,445 @@
+*&---------------------------------------------------------------------*
+*& Report  ZXF16W_LN_DBSK_PAKT02
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zxf16w_ln_dbsk_pakt02.
+
+CLASS lcl_user_command DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+      alv_user_command
+                    FOR EVENT double_click OF cl_gui_alv_grid
+        IMPORTING e_row e_column sender.
+
+  PRIVATE SECTION.
+
+ENDCLASS.
+
+TYPES: BEGIN OF ts_produkt,
+        mark TYPE c.
+        INCLUDE STRUCTURE zxf16w_dbsk_prod.
+TYPES: END OF ts_produkt.
+
+TABLES: zxf16w_dbsk_prod.
+
+CONTROLS: produkt_detail TYPE TABLEVIEW USING SCREEN 1101.
+
+DATA: gt_produkt_selection    TYPE TABLE OF zxf16w_dbsk_prod_s,
+      gt_produkt_detail       TYPE TABLE OF ts_produkt,
+      gt_produkt_detail_saved LIKE gt_produkt_detail,
+      gt_fcat                 TYPE lvc_t_fcat,
+      gs_produkt_detail       LIKE LINE OF gt_produkt_detail,
+      gs_produkt_detail_saved LIKE LINE OF gt_produkt_detail_saved,
+      go_container_selection  TYPE REF TO cl_gui_custom_container,
+      go_alv_selection        TYPE REF TO cl_gui_alv_grid,
+      go_alv_user_command     TYPE REF TO lcl_user_command,
+      gv_display_only         TYPE c,
+      gv_okcode               LIKE sy-ucomm,
+      gv_index                TYPE i.
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME.
+SELECT-OPTIONS: s_prod FOR zxf16w_dbsk_prod-produkt_id,
+                s_pakt FOR zxf16w_dbsk_prod-paket_id,
+                s_name FOR zxf16w_dbsk_prod-name,
+                s_einmal FOR zxf16w_dbsk_prod-preis_einmal,
+                s_jaerli FOR zxf16w_dbsk_prod-preis_jaerlich.
+SELECTION-SCREEN END OF BLOCK b1.
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME.
+PARAMETERS: s_shw_id TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_pi TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_na TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_pe TYPE c AS CHECKBOX DEFAULT 'X',
+            s_shw_pj TYPE c AS CHECKBOX DEFAULT 'X'.
+SELECTION-SCREEN END OF BLOCK b2.
+
+SELECT * INTO CORRESPONDING FIELDS OF TABLE gt_produkt_selection
+  FROM zxf16w_dbsk_prod
+ WHERE produkt_id IN s_prod
+   AND paket_id <> 0
+   AND paket_id IN s_pakt
+   AND name IN s_name
+   AND preis_einmal IN s_einmal
+   AND preis_jaerlich IN s_jaerli.
+
+gv_display_only = 'X'.
+
+
+CREATE OBJECT go_container_selection
+  EXPORTING
+    container_name = 'CONTAINER_SELECTION'.
+
+
+CREATE OBJECT go_alv_selection
+  EXPORTING
+    i_parent = go_container_selection.
+
+PERFORM create_catalog CHANGING gt_fcat.
+
+CALL METHOD go_alv_selection->set_table_for_first_display
+  EXPORTING
+    i_structure_name = 'ZXF16W_DBSK_PROD_S'
+  CHANGING
+    it_outtab        = gt_produkt_selection
+    it_fieldcatalog  = gt_fcat.
+
+
+
+CREATE OBJECT go_alv_user_command.
+SET HANDLER go_alv_user_command->alv_user_command FOR go_alv_selection.
+
+CALL SCREEN 1001.
+
+FORM create_catalog  CHANGING pt_fcat TYPE lvc_t_fcat.
+  FIELD-SYMBOLS: <fs_fcat> LIKE LINE OF gt_fcat.
+
+  CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_structure_name       = 'ZXF16W_DBSK_PROD_S'
+    CHANGING
+      ct_fieldcat            = pt_fcat
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+  IF sy-subrc <> 0.
+      MESSAGE text-004 TYPE 'E'.
+  ENDIF.
+
+
+  LOOP AT pt_fcat ASSIGNING <fs_fcat>.
+    IF    <fs_fcat>-FIELDNAME = 'PRODUKT_ID'
+     AND  s_shw_id IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'PAKET_ID'
+     AND  s_shw_pi IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'NAME'
+     AND  s_shw_na IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'PREIS_EINMAL'
+     AND  s_shw_pe IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'PREIS_EINMAL_W'
+     AND  s_shw_pe IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'PREIS_JAERLICH'
+     AND  s_shw_pj IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+    IF    <fs_fcat>-FIELDNAME = 'PREIS_JAERLICH_W'
+     AND  s_shw_pj IS INITIAL.
+      <fs_fcat>-no_out = 'X'.
+    ENDIF.
+
+  ENDLOOP.
+ENDFORM.
+
+FORM user_command_1001 CHANGING pv_okcode.
+  DATA: lv_okcode LIKE sy-ucomm.
+
+  lv_okcode = pv_okcode.
+  CLEAR gv_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+  ENDCASE.
+ENDFORM.
+
+FORM exit.
+  LEAVE TO SCREEN 0.
+ENDFORM.
+
+FORM user_command_1101 CHANGING pv_okcode.
+  DATA: lv_okcode LIKE sy-ucomm.
+
+  lv_okcode = pv_okcode.
+  CLEAR gv_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      PERFORM exit.
+    WHEN 'EXIT'.
+      PERFORM exit.
+    WHEN 'CANC'.
+      PERFORM exit.
+    WHEN 'MODI'.
+      PERFORM switch_modus.
+    WHEN 'SAVE'.
+      IF gv_display_only IS INITIAL.
+        PERFORM check_input.
+        PERFORM save_input.
+      ENDIF.
+    WHEN 'ADDL'.
+      IF gv_display_only IS INITIAL.
+        PERFORM append_empty_line.
+      ENDIF.
+    WHEN 'DELL'.
+      IF gv_display_only IS INITIAL.
+        PERFORM remove_lines.
+      ENDIF.
+    WHEN 'DELP'.
+      IF gv_display_only IS INITIAL.
+        PERFORM delete_paket.
+      ENDIF.
+  ENDCASE.
+ENDFORM.
+
+FORM delete_paket.
+  DELETE FROM zxf16w_dbsk_prod WHERE produkt_id = zxf16w_dbsk_prod-produkt_id.
+
+  DELETE FROM zxf16w_dbsk_PAKT WHERE paket_id = zxf16w_dbsk_prod-paket_id.
+
+  DELETE gt_produkt_selection INDEX gv_index.
+
+  call METHOD go_alv_selection->refresh_table_display.
+
+  PERFORM exit.
+ENDFORM.
+
+FORM switch_modus.
+  IF gv_display_only IS INITIAL.
+    gv_display_only = 'X'.
+
+    "revert changes
+    MOVE-CORRESPONDING gs_produkt_detail_saved TO zxf16w_dbsk_prod.
+    MOVE-CORRESPONDING gt_produkt_detail_saved TO gt_produkt_detail.
+
+    CLEAR gs_produkt_detail_saved.
+    CLEAR gt_produkt_detail_saved.
+
+    DESCRIBE TABLE gt_produkt_detail LINES produkt_detail-lines.
+
+  ELSE.
+    CLEAR gv_display_only.
+    MOVE-CORRESPONDING zxf16w_dbsk_prod TO gs_produkt_detail_saved.
+    MOVE-CORRESPONDING gt_produkt_detail TO gt_produkt_detail_saved.
+
+  ENDIF.
+ENDFORM.
+
+FORM remove_lines.
+
+  FIELD-SYMBOLS: <lfs_produkt> TYPE ts_produkt.
+
+  LOOP AT gt_produkt_detail ASSIGNING <lfs_produkt>.
+    IF <lfs_produkt>-mark IS NOT INITIAL.
+      DELETE gt_produkt_detail INDEX sy-tabix.
+    ENDIF.
+  ENDLOOP.
+
+  DESCRIBE TABLE gt_produkt_detail LINES produkt_detail-lines.
+
+ENDFORM.
+
+FORM check_input.
+  DATA: lv_name_new TYPE zxf16w_dbsk_produkt_name,
+        lv_produkt_id TYPE zxf16w_dbsk_produkt_id,
+        lv_lines    TYPE i.
+
+  FIELD-SYMBOLS: <lfs_produkt> TYPE ts_produkt.
+
+  IF gs_produkt_detail_saved-name <> zxf16w_dbsk_prod-name.
+    SELECT SINGLE name INTO lv_name_new
+      FROM zxf16w_dbsk_prod
+     WHERE name = zxf16w_dbsk_prod-name.
+
+    IF sy-subrc = 0 OR
+      zxf16w_dbsk_prod-name IS INITIAL.
+      MESSAGE text-001 TYPE 'E'.
+    ENDIF.
+
+  ENDIF.
+
+  DESCRIBE TABLE gt_produkt_detail LINES lv_lines.
+  IF lv_lines = 0.
+    MESSAGE text-002 TYPE 'E'.
+  ENDIF.
+
+  LOOP AT gt_produkt_detail ASSIGNING <lfs_produkt>.
+    SELECT SINGLE produkt_id INTO lv_produkt_id
+      FROM zxf16w_dbsk_prod
+     WHERE produkt_id = <lfs_produkt>-produkt_id.
+    IF sy-subrc <> 0.
+      MESSAGE text-004 TYPE 'E'.
+    ENDIF.
+  ENDLOOP.
+
+  PERFORM check_duplicat_product.
+
+ENDFORM.
+
+FORM check_duplicat_product.
+  DATA: lv_tabix_i LIKE sy-tabix,
+        lv_tabix_j LIKE lv_tabix_i.
+
+  FIELD-SYMBOLS: <lfs_produkt_i> TYPE ts_produkt,
+                 <lfs_produkt_j> TYPE ts_produkt.
+
+
+  LOOP AT gt_produkt_detail ASSIGNING <lfs_produkt_i>.
+    lv_tabix_i = sy-tabix.
+
+    LOOP AT gt_produkt_detail ASSIGNING <lfs_produkt_j>.
+      lv_tabix_j = sy-tabix.
+
+      IF  <lfs_produkt_i>-produkt_id = <lfs_produkt_j>-produkt_id
+      AND lv_tabix_i <> lv_tabix_j.
+        MESSAGE text-006 TYPE 'E'.
+      ENDIF.
+
+    ENDLOOP.
+  ENDLOOP.
+
+ENDFORM.
+
+FORM modify_line.
+  MODIFY gt_produkt_detail FROM gs_produkt_detail INDEX produkt_detail-current_line.
+ENDFORM.
+
+FORM modify_produkt_detail.
+  DATA: ls_produkt LIKE gs_produkt_detail.
+
+  SELECT SINGLE * INTO CORRESPONDING FIELDS OF ls_produkt
+    FROM zxf16w_dbsk_prod
+   WHERE produkt_id = gs_produkt_detail-produkt_id.
+
+    ls_produkt-mark = gs_produkt_detail-mark.
+
+  MODIFY gt_produkt_detail FROM ls_produkt INDEX produkt_detail-current_line.
+ENDFORM.
+
+FORM append_empty_line .
+  APPEND INITIAL LINE TO gt_produkt_detail.
+  DESCRIBE TABLE gt_produkt_detail LINES produkt_detail-lines.
+ENDFORM.
+
+FORM save_input .
+  DATA: ls_paket          TYPE zxf16w_dbsk_pakt_s.
+
+
+  FIELD-SYMBOLS: <lfs_produkt> LIKE gs_produkt_detail.
+
+  UPDATE zxf16w_dbsk_prod.
+
+  IF sy-subrc <> 0.
+    MESSAGE text-004 TYPE 'E'.
+  ENDIF.
+
+  DELETE FROM zxf16w_dbsk_pakt WHERE paket_id = zxf16w_dbsk_prod-paket_id.
+
+  LOOP AT gt_produkt_detail ASSIGNING <lfs_produkt>.
+
+    ls_paket-paket_id = zxf16w_dbsk_prod-paket_id.
+    ls_paket-produkt_id = <lfs_produkt>-produkt_id.
+
+    INSERT INTO zxf16w_dbsk_pakt VALUES ls_paket.
+    IF sy-subrc <> 0.
+      ROLLBACK WORK.
+      MESSAGE text-004 TYPE 'E'.
+    ENDIF.
+    CLEAR ls_paket.
+  ENDLOOP.
+
+  MODIFY gt_produkt_selection FROM zxf16w_dbsk_prod INDEX gv_index.
+
+  call METHOD go_alv_selection->refresh_table_display.
+
+  MESSAGE text-005 TYPE 'S'.
+ENDFORM.
+
+CLASS lcl_user_command IMPLEMENTATION.
+  METHOD alv_user_command.
+    DATA: lt_paket TYPE TABLE OF zxf16w_dbsk_pakt_s.
+
+
+    FIELD-SYMBOLS: <lfs_paket> TYPE zxf16w_dbsk_pakt_s.
+
+    READ TABLE gt_produkt_selection INTO zxf16w_dbsk_prod INDEX e_row.
+    SELECT * INTO CORRESPONDING FIELDS OF TABLE lt_paket
+                FROM zxf16w_dbsk_pakt
+               WHERE paket_id = zxf16w_dbsk_prod-paket_id.
+
+    MOVE-CORRESPONDING zxf16w_dbsk_prod TO gs_produkt_detail_saved.
+
+    CLEAR gt_produkt_detail.
+    LOOP AT lt_paket ASSIGNING <lfs_paket>.
+      SELECT * APPENDING CORRESPONDING FIELDS OF TABLE gt_produkt_detail
+        FROM zxf16w_dbsk_prod
+       WHERE produkt_id = <lfs_paket>-produkt_id.
+    ENDLOOP.
+
+    REFRESH CONTROL 'PRODUKT_DETAIL' FROM SCREEN 1101.
+    DESCRIBE TABLE gt_produkt_detail LINES produkt_detail-lines.
+
+    gv_index = e_row.
+
+    CALL SCREEN 1101.
+  ENDMETHOD.                           "handle_user_command
+*-----------------------------------------------------------------
+ENDCLASS.
+
+
+
+MODULE status_1001 OUTPUT.
+  SET PF-STATUS '1001'.
+  IF gv_display_only IS NOT INITIAL.
+    SET TITLEBAR '101'.
+  ELSE.
+    SET TITLEBAR '102'.
+  ENDIF.
+ENDMODULE.
+
+MODULE user_command_1001 INPUT.
+  PERFORM user_command_1001 CHANGING gv_okcode.
+ENDMODULE.
+
+MODULE status_1101 OUTPUT.
+  IF gv_display_only IS NOT INITIAL.
+    SET PF-STATUS '1101'.
+    SET TITLEBAR '101'.
+    LOOP AT SCREEN.
+* DISABLE ELEMENTS DYNAMICLY
+      IF screen-group1 = '001'.
+        screen-input = '0'.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDLOOP.
+  ELSE.
+    SET PF-STATUS '1102'.
+    SET TITLEBAR '102'.
+  ENDIF.
+ENDMODULE.
+
+
+MODULE user_command_1101 INPUT.
+  PERFORM user_command_1101 CHANGING gv_okcode.
+ENDMODULE.
+
+MODULE modify_produkt_detail OUTPUT.
+  PERFORM modify_line.
+ENDMODULE.
+
+MODULE modify_produkt_detail INPUT.
+  PERFORM modify_produkt_detail.
+ENDMODULE.

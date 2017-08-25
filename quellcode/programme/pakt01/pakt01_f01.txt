@@ -1,0 +1,255 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZXF16W_LN_DBSK_PAKT01_F01
+*&---------------------------------------------------------------------*
+
+FORM user_command_1001 CHANGING pv_okcode.
+
+  DATA: lv_okcode LIKE sy-ucomm.
+  lv_okcode = gv_okcode.
+  CLEAR gv_okcode.
+
+  CASE lv_okcode.
+    WHEN 'BACK'.
+      LEAVE TO SCREEN 0.
+    WHEN 'EXIT'.
+      LEAVE TO SCREEN 0.
+    WHEN 'CANC'.
+      LEAVE TO SCREEN 0.
+    WHEN 'SAVE'.
+      PERFORM save_paket.
+    WHEN 'ADDL'.
+      PERFORM append_empty_line.
+    WHEN 'DELL'.
+      PERFORM delete_lines.
+  ENDCASE.
+
+ENDFORM.
+
+FORM modify_produkt USING ps_produkt LIKE gs_produkt.
+  DATA: ls_produkt LIKE ps_produkt.
+
+  SELECT SINGLE * INTO CORRESPONDING FIELDS OF ls_produkt
+    FROM zxf16w_dbsk_prod
+   WHERE produkt_id = gs_produkt-produkt_id.
+
+  MODIFY gt_produkt FROM ls_produkt INDEX produkt_tab-current_line.
+
+ENDFORM.
+
+FORM swap_line.
+  produkt_tab-current_line = sy-loopc.
+ENDFORM.
+
+FORM modify_line.
+  MODIFY gt_produkt FROM gs_produkt INDEX produkt_tab-current_line.
+ENDFORM.
+
+FORM save_paket.
+  IF gs_produkt_paket-produkt_id IS INITIAL.
+    PERFORM check_input_create.
+    PERFORM insert_input.
+  ELSE.
+    PERFORM check_input_save.
+    PERFORM delete_old_input.
+    PERFORM insert_input.
+  ENDIF.
+ENDFORM.
+
+FORM insert_input.
+
+  DATA: ls_produkt TYPE ts_produkt,
+        ls_pakt    TYPE zxf16w_dbsk_pakt_s,
+        lv_subrc   LIKE sy-subrc.
+
+  IF  gs_produkt_paket-produkt_id IS INITIAL.
+    CALL FUNCTION 'ZXF16W_LN_DBSK_GENERATE_ID'
+      EXPORTING
+        object = 'ZXF16WPROD'
+      IMPORTING
+        id     = gs_produkt_paket-produkt_id.
+
+  ENDIF.
+
+  IF gs_produkt_paket-paket_id IS INITIAL.
+    CALL FUNCTION 'ZXF16W_LN_DBSK_GENERATE_ID'
+      EXPORTING
+        object = 'ZXF16WPAKT'
+      IMPORTING
+        id     = gs_produkt_paket-paket_id.
+
+  ENDIF.
+
+* if anything goes wrong the functions before will break processing
+  INSERT INTO zxf16w_dbsk_prod VALUES gs_produkt_paket.
+  IF sy-subrc > 0.
+    lv_subrc = sy-subrc.
+  ENDIF.
+
+
+  LOOP AT gt_produkt INTO ls_produkt.
+
+    CLEAR ls_pakt.
+    ls_pakt-paket_id = gs_produkt_paket-paket_id.
+    ls_pakt-produkt_id = ls_produkt-produkt_id.
+
+    INSERT INTO zxf16w_dbsk_pakt VALUES ls_pakt.
+    IF sy-subrc > 0.
+      lv_subrc = sy-subrc.
+    ENDIF.
+  ENDLOOP.
+
+  IF lv_subrc = 0.
+    COMMIT WORK.
+    MOVE-CORRESPONDING gs_produkt_paket TO gs_saved_produkt_paket.
+    MOVE-CORRESPONDING gt_produkt TO gt_saved_produkt.
+    MESSAGE text-001 TYPE 'S'.
+  ELSE.
+    ROLLBACK WORK.
+    MESSAGE text-002 TYPE 'E'.
+  ENDIF.
+
+ENDFORM.
+
+FORM delete_old_input.
+
+  DATA: lv_subrc LIKE sy-subrc.
+
+  DELETE FROM zxf16w_dbsk_prod WHERE produkt_id = gs_produkt_paket-produkt_id.
+  IF sy-subrc > 0.
+    lv_subrc = sy-subrc.
+  ENDIF.
+
+  DELETE FROM zxf16w_dbsk_pakt WHERE paket_id = gs_produkt_paket-paket_id.
+  IF sy-subrc > 0.
+    lv_subrc = sy-subrc.
+  ENDIF.
+
+  IF lv_subrc <> 0.
+    MESSAGE text-007 TYPE 'E'.
+  ENDIF.
+
+ENDFORM.
+
+FORM check_input.
+  DATA: lv_lines      TYPE i,
+        lv_produkt_id TYPE zxf16w_dbsk_produkt_id.
+
+  FIELD-SYMBOLS: <lfs_produkt> TYPE ts_produkt.
+
+  PERFORM check_currency USING gs_produkt_paket-preis_einmal_w.
+  PERFORM check_currency USING gs_produkt_paket-preis_jaerlich_w.
+
+  DESCRIBE TABLE gt_produkt LINES lv_lines.
+  IF lv_lines = 0.
+    MESSAGE text-006 TYPE 'E'.
+  ENDIF.
+
+  LOOP AT gt_produkt ASSIGNING <lfs_produkt>.
+    SELECT SINGLE produkt_id INTO lv_produkt_id
+      FROM zxf16w_dbsk_prod
+     WHERE produkt_id = <lfs_produkt>-produkt_id.
+    IF sy-subrc <> 0.
+      MESSAGE text-004 TYPE 'E'.
+    ENDIF.
+  ENDLOOP.
+
+  PERFORM check_duplicat_product.
+
+ENDFORM.
+
+FORM check_duplicat_product.
+  DATA: lv_tabix_i LIKE sy-tabix,
+        lv_tabix_j LIKE lv_tabix_i.
+
+  FIELD-SYMBOLS: <lfs_produkt_i> TYPE ts_produkt,
+                 <lfs_produkt_j> TYPE ts_produkt.
+
+
+  LOOP AT gt_produkt ASSIGNING <lfs_produkt_i>.
+    lv_tabix_i = sy-tabix.
+
+    LOOP AT gt_produkt ASSIGNING <lfs_produkt_j>.
+      lv_tabix_j = sy-tabix.
+
+      IF  <lfs_produkt_i>-produkt_id = <lfs_produkt_j>-produkt_id
+      AND lv_tabix_i <> lv_tabix_j.
+        MESSAGE text-008 TYPE 'E'.
+      ENDIF.
+
+    ENDLOOP.
+  ENDLOOP.
+
+ENDFORM.
+
+FORM check_input_create.
+  DATA: ls_podukt TYPE zxf16w_dbsk_prod_s.
+
+  SELECT SINGLE * INTO CORRESPONDING FIELDS OF ls_podukt
+    FROM zxf16w_dbsk_prod
+   WHERE name = gs_produkt_paket-name.
+
+  IF sy-subrc = 0.
+    MESSAGE e001(zxf16w_ln_dbsk_msg).
+  ENDIF.
+
+  PERFORM check_input.
+ENDFORM.
+
+FORM check_input_save.
+  DATA: lv_name_new  TYPE zxf16w_dbsk_produkt_name.
+
+  IF gs_saved_produkt_paket-name <> gs_produkt_paket-name.
+
+    SELECT SINGLE name INTO lv_name_new
+      FROM zxf16w_dbsk_prod
+     WHERE name = gs_produkt_paket-name.
+
+    IF sy-subrc = 0 OR
+      gs_produkt_paket-name IS INITIAL.
+      MESSAGE text-005 TYPE 'E'.
+    ENDIF.
+
+  ENDIF.
+
+  PERFORM check_input.
+
+ENDFORM.
+
+FORM check_currency USING p_waers TYPE zxf16w_dbsk_waehrung.
+  CALL FUNCTION 'CMS_API_GENERAL_CURRENCY_CHECK'
+    EXPORTING
+      i_waers          = p_waers
+    EXCEPTIONS
+      invalid_currency = 1
+*     OTHERS           = 2
+    .
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.
+
+FORM append_empty_line.
+  APPEND INITIAL LINE TO gt_produkt.
+
+  PERFORM set_line_count.
+ENDFORM.
+
+FORM delete_lines.
+
+  FIELD-SYMBOLS: <lfs_produkt> TYPE ts_produkt.
+
+  LOOP AT gt_produkt ASSIGNING <lfs_produkt>.
+    IF <lfs_produkt>-mark IS NOT INITIAL.
+      DELETE gt_produkt INDEX sy-tabix.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+
+FORM set_line_count.
+  DESCRIBE TABLE gt_produkt LINES produkt_tab-lines.
+
+  IF produkt_tab-lines = 0.
+    APPEND INITIAL LINE TO gt_produkt.
+    produkt_tab-lines = 1.
+  ENDIF.
+ENDFORM.

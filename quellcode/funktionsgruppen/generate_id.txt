@@ -1,0 +1,42 @@
+FUNCTION ZXF16W_LN_DBSK_GENERATE_ID.
+*"----------------------------------------------------------------------
+*"*"Lokale Schnittstelle:
+*"  IMPORTING
+*"     REFERENCE(OBJECT) TYPE  INRI-OBJECT
+*"  EXPORTING
+*"     VALUE(ID)
+*"----------------------------------------------------------------------
+
+DATA: lv_number_count LIKE INRI-QUANTITY,
+      lv_return_code LIKE INRI-RETURNCODE.
+
+CALL FUNCTION 'NUMBER_GET_NEXT'
+  EXPORTING
+   nr_range_nr                   = '01'
+   object                        = OBJECT
+   QUANTITY                      = '1'
+ IMPORTING
+   NUMBER                        =  ID
+   QUANTITY                      =  lv_number_count
+   RETURNCODE                    =  lv_return_code
+ EXCEPTIONS
+   INTERVAL_NOT_FOUND            = 1
+   NUMBER_RANGE_NOT_INTERN       = 2
+   OBJECT_NOT_FOUND              = 3
+   QUANTITY_IS_0                 = 4
+   QUANTITY_IS_NOT_1             = 5
+   INTERVAL_OVERFLOW             = 6
+   BUFFER_OVERFLOW               = 7
+   OTHERS                        = 8
+          .
+IF  sy-subrc <> 0.
+  Message e000(ZXF16W_LN_DBSK_MSG).
+ENDIF.
+
+IF lv_return_code IS NOT INITIAL.
+  MESSAGE w002(ZXF16W_LN_DBSK_MSG).
+ENDIF.
+
+
+
+ENDFUNCTION.
